@@ -1,12 +1,11 @@
+% CSCI 5481 Homework 1
+% Christopher White
+% September 9, 2018
 
-# CSCI 5481
+# Homework 1: BURST
 
-## Homework 1
-## Christopher White
-## September 9, 2018
-
----
-### PRINT PYTHON FILE
+***
+## PRINT PYTHON FILE
 
 
 
@@ -23,7 +22,7 @@
     import sys, os
     import argparse
     from subprocess import Popen, PIPE
-    
+
     def make_arg_parser():
         parser = argparse.ArgumentParser(prog='exercise01.py',
                               # version="%prog 1.0",
@@ -31,7 +30,7 @@
         parser.add_argument("-q","--query",
                           default=argparse.SUPPRESS,
                           required=True,
-                          help="Path to query fasta [required]") 
+                          help="Path to query fasta [required]")
         parser.add_argument("-r","--ref",
                           default=argparse.SUPPRESS,
                           required=True,
@@ -46,43 +45,43 @@
                           help="Path to output file [required]")
         parser.add_argument("-c","--command",
                           default='./burst',
-                          help="Path to BURST command") 
+                          help="Path to BURST command")
         parser.add_argument("-V","--verbose",
                           action="store_true",
                           help="Verbose output")
         return parser
-    
+
     # Runs BURST to search query sequences against reference sequences
     def run_burst(query, ref, taxonomy, output, burst_cmd='./burst', verbose=False):
         """thread worker function"""
-    
+
         cmd = burst_cmd + ' -q ' + query + ' -r ' + ref + ' -t ' + taxonomy + ' -o ' + output
-        
+
         return run_command(cmd, verbose=verbose)
-    
+
     # runs the given command and returns return value and output
     def run_command(cmd, verbose=False):
         if verbose:
             print(cmd)
-        
+
         proc = Popen(cmd,shell=True,universal_newlines=True,stdout=PIPE,stderr=PIPE)
-        
+
         stdout, stderr = proc.communicate('Running command')
         return_val = proc.returncode
         return str(return_val), stdout, stderr
-    
-        
+
+
     if __name__ == '__main__':
         parser = make_arg_parser()
         args = parser.parse_args()
-    
+
         return_value, stdout, stderr = run_burst(args.query, args.ref, args.taxonomy, args.output, args.command, args.verbose)
-    
+
         print('\nReturn Value: '+return_value)
         print('\nSTDOUT: ...\n'+stdout)
         print('\nSTDERR: '+stderr)
         print('---')
-        
+
 
 ### RUN COMMAND LINE
 
@@ -92,9 +91,9 @@
 ```
 
     ./burst -q query.fna -r ref.fna -t taxonomy.txt -o output.txt
-    
+
     Return Value: 0
-    
+
     STDOUT: ...
      --> Setting threads to 0
     Using up to AVX-128 with 0 threads.
@@ -104,7 +103,7 @@
     There are 5000 references and hence 312 clumps (+1)
     Average R pack length = 1423.881789
     Searching best paths through 35294 unique queries...
-    
+
     Search Progress: [0.32%]
     Search Progress: [0.64%]
     Search Progress: [0.96%]
@@ -420,15 +419,15 @@
     Search Progress: [100.00%]
     Search Progress: [100.00%]
     Search complete. Consolidating results...
-    
+
     Alignment time: 7.511785 seconds
-    
-    
-    STDERR: 
+
+
+    STDERR:
     ---
 
 
----
+***
 ## PROCESS OUTPUT FILE
 
 
@@ -449,10 +448,7 @@ df = pd.read_csv('output.txt', header=None, delim_whitespace=True,
 df.head(5)
 ```
 
-
-
-
-<div>
+<!-- <div>
 <style>
     .dataframe tbody tr th:only-of-type {
         vertical-align: middle;
@@ -467,6 +463,21 @@ df.head(5)
     }
 </style>
 <table border="1" class="dataframe">
+  <colgroup>
+    <col width=5%>
+    <col width=25%>
+    <col width=10%>
+    <col width=15%>
+    <col width=5%>
+    <col width=5%>
+    <col width=5%>
+    <col width=5%>
+    <col width=5%>
+    <col width=5%>
+    <col width=5%>
+    <col width=5%>
+    <col width=5%>
+  </colgroup>
   <thead>
     <tr style="text-align: right;">
       <th></th>
@@ -562,9 +573,7 @@ df.head(5)
     </tr>
   </tbody>
 </table>
-</div>
-
-
+</div> -->
 
 ### Question 1: What fraction of the input query sequences had a match in the database at 97% or above?
 
