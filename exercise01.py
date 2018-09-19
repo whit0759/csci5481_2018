@@ -6,7 +6,7 @@
 # exercise01.py -h
 import sys, os
 import argparse
-from subprocess import Popen, PIPE, run
+from subprocess import Popen, PIPE
 
 def make_arg_parser():
     parser = argparse.ArgumentParser(prog='exercise01.py',
@@ -42,9 +42,6 @@ def run_burst(query, ref, taxonomy, output, burst_cmd='./burst', verbose=False):
 
     cmd = burst_cmd + ' -q ' + query + ' -r ' + ref + ' -t ' + taxonomy + ' -o ' + output
     
-    if verbose:
-        print(cmd)     
-        
     return run_command(cmd, verbose=verbose)
 
 # runs the given command and returns return value and output
@@ -52,20 +49,21 @@ def run_command(cmd, verbose=False):
     if verbose:
         print(cmd)
     
-    proc = run(cmd,shell=True,universal_newlines=True,stdout=PIPE,stderr=PIPE)
+    proc = Popen(cmd,shell=True,universal_newlines=True,stdout=PIPE,stderr=PIPE)
     
-    #stdout, stderr = proc.communicate('Running command')
+    stdout, stderr = proc.communicate('Running command')
     return_val = proc.returncode
-    return str(return_val), proc.stdout, proc.stderr
+    return str(return_val), stdout, stderr
 
     
 if __name__ == '__main__':
     parser = make_arg_parser()
     args = parser.parse_args()
 
-    cmd = run_burst(args.query, args.ref, args.taxonomy, args.output, args.command, args.verbose)
+    return_value, stdout, stderr = run_burst(args.query, args.ref, args.taxonomy, args.output, args.command, args.verbose)
 
-    return_val, stdout, stderr = run_command(cmd, args.verbose)
-    print("Return Value: ", return_val)
-    print("STDOUT: ", stdout)
+    print('\nReturn Value: '+return_value)
+    print('\nSTDOUT: ...\n'+stdout)
+    print('\nSTDERR: '+stderr)
+    print('---')
     
