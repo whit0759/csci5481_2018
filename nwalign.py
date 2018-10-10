@@ -5,7 +5,7 @@
 #
 
 
-import sys, os
+import sys
 import argparse
 import numpy as np
 
@@ -25,9 +25,9 @@ def make_arg_parser():
                       required=True,
                       help="Path to reference fasta [required]")
     parser.add_argument("-m","--match",
-                        default=argparse.SUPPRESS,
+                        default=None,
                         required=False,
-                        help="Matches file for anchored alignment")
+                        help="Match file for anchored alignment")
     parser.add_argument("-o","--output",
                       default=None,
                       required=False,
@@ -49,6 +49,11 @@ def gen_matrix(size=()):
     align_mat[:1,:] = horz
     align_mat[:,:1] = vert
     
+    # INITIAL ALIGNMENT MATRIX
+    # _ a b c ...
+    # a 0 -2 -4 ...
+    # b -2 0 0 ...
+    # c -4 0 0 ...
     align_mat = align_mat*-2
     
     return align_mat
@@ -72,12 +77,18 @@ def read_match(matchfile):
     Returns the sequence anchors read from a match file.
     """
     
-    anchor_mat = np.loadtxt(matchfile)
+    anchor_mat = np.loadtxt(matchfile, dtype='i4')
     
+    # First two columns are for human sequence
     human_match = anchor_mat[:,:2]
+    
+    # Second two columns are for fly sequence
     fly_match = anchor_mat[:,2:]
     
-    return fly_match, human_match
+    # Assert that the anchor pairs are equal in dimension
+    assert(np.shape(human_match)==np.shape(fly_match))
+    
+    return human_match, fly_match
 
 def align_matrix(seq1, seq2):
     """
@@ -87,6 +98,7 @@ def align_matrix(seq1, seq2):
     nh = len(seq1)
     nv = len(seq2)
 
+    # Create initial matrix
     nwmat = gen_matrix(size=(nv+1,nh+1))
 
     gap = GAP
@@ -97,24 +109,27 @@ def align_matrix(seq1, seq2):
             """ Step through each entry of each row """
     
             if seq2[i]==seq1[j]:
+                # If the entries match, set match to MATCH
                 match = MATCH
             else:
                 match = MISMATCH
-                
+            
+            # The matrix cell is the max of three conditions, either a match
+            # or mistmatch plus gap penalties.
             nwmat[i+1, j+1] = max(nwmat[i,j]+match, nwmat[i+1,j]+gap, 
                  nwmat[i,j+1]+gap)
 
     return nwmat
 
-def find_alignments(nwmat,seq1,seq2):
+def find_alignments(seq1,seq2):
     """
     Returns the alignment score and the optimal alignments of the sequences
     """
+    nwmat = align_matrix(seq1, seq2)
     
     # The score is the entry of the last row and last column
     score = nwmat[-1,-1]
     
- 
     newseq1 = ''
     newseq2 = ''
     
@@ -135,22 +150,110 @@ def find_alignments(nwmat,seq1,seq2):
         # adjacent values to the current value. If in the first row or first
         # column, then prepend '_' (gaps) until we reach (0,0)
         if i>0 and j>0:
+            # If a match condition exists decrement i and j
             if nwmat[i-1, j-1] == (nwmat[i,j]-match):
                 i-=1
                 j-=1
                 newseq2 = seq2[i] + newseq2
                 newseq1 = seq1[j] + newseq1
+            
+            # If the current cell resulted from the cell above, insert a gap
+            # in seq2
             elif nwmat[i-1,j] == (nwmat[i,j]-gap):
                 i-=1
-                newseq2 = '_' + newseq2
+                newseq1 = '_' + newseq1
+                newseq2 = seq2[i] + newseq2
+            
+            # If The current cell resulted from the cell to the left, insert a
+            # gap in seq1
             elif nwmat[i,j-1] == (nwmat[i,j]-gap):
                 j-=1
-                newseq1 = '_' + newseq1
+                newseq1 = seq1[j] + newseq1
+                newseq2 = '_' + newseq2
         elif i>0:
             i-=1
-            newseq2 = '_' + newseq2
+            newseq1 = '_' + newseq1
+            newseq2 = seq2[i] + newseq2
         elif j>0:
             j-=1
-            newseq1 = '_' + newseq1
+            newseq1 = seq1[j] + newseq1
+            newseq2 = '_' + newseq2
     
-    return score, newseq1, newseq2
+    return (score, newseq1, newseq2)
+
+def anchor_align(human_seq, fly_seq, human_match, fly_match):
+    """
+    Returns aligned sequences and anchored sequences for a given set of human
+    and fly sequences with anchored regions given by 'match' arrays.
+    """
+    
+    results=[]
+    
+    # The matches are given in start-stop pairs. The first aligment is done 
+    # from the beginning to the first start. Then, alignments are between each
+    # stop and the next start. I am assuming that an equal number of pairs are
+    # given.
+    
+    # Assert that the max or min numbers in the match arrays don't exceed the
+    # sequence bounds
+    assert(np.max(human_match)<=len(human_seq))
+    assert(np.max(fly_match)<=len(fly_seq))
+    assert(np.min(human_match)>=0)
+    assert(np.min(fly_match)>=0)
+       
+    # For all the sections between a 'stop' and a 'start' align the sections
+    for n in range(np.size(human_match[:,0])-1):
+        results.append(find_alignments(
+                      human_seq[int(human_match[n,1]):int(human_match[n+1,0])],
+                      fly_seq[int(fly_match[n,1]):int(fly_match[n+1,0])] ))
+        
+    
+    return results
+
+def print_alignments(file, results):
+    """
+    Print the alignment scores and sequences
+    """
+    
+    for result in results:
+        score, seq1, seq2 = result
+        print(score, file=file)
+        print('HUMAN\n\t{}'.format(seq1), file=file)
+        print('FLY\n\t{}'.format(seq2), file=file)
+
+def main(query, ref, match=None, output=None):
+    """
+    Run the alignments for the given input files and if match or output files
+    are given, process those as well.
+    """
+    
+    # Read the sequences
+    human_seq = read_seq(query)
+    fly_seq = read_seq(ref)
+    
+    if match:
+        # If a match file is given use it to do anchored alignment
+        human_match, fly_match = read_match(match)
+        results = anchor_align(human_seq, fly_seq, human_match,
+                                          fly_match)
+    else:
+        # If no match file, align the whole sequences
+        results = [ find_alignments(human_seq, fly_seq) ]
+        
+    if output:
+        # If an output file is given, write to it
+        with open(output,mode='w') as f:
+            print_alignments(f, results)
+            
+    else:
+        # If no output file, print to stdout
+        print_alignments(sys.stdout, results)
+        
+    
+
+if __name__=="__main__":
+    
+    parser = make_arg_parser()
+    args = parser.parse_args()
+    
+    main(args.query, args.ref, match=args.match, output=args.output)

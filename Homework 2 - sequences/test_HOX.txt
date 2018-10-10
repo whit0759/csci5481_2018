@@ -1,0 +1,10 @@
+-13.0
+HUMAN
+	_SG__PDR
+FLY
+	QFGKCQER
+-2.0
+HUMAN
+	VK
+FLY
+	IK
