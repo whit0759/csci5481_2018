@@ -88,7 +88,8 @@ def read_match(matchfile):
     # Assert that the anchor pairs are equal in dimension
     assert(np.shape(human_match)==np.shape(fly_match))
     
-    return human_match, fly_match
+    # Subtract 1 to account for 0 based indexing
+    return human_match-1, fly_match-1
 
 def align_matrix(seq1, seq2):
     """
@@ -187,8 +188,6 @@ def anchor_align(human_seq, fly_seq, human_match, fly_match):
     and fly sequences with anchored regions given by 'match' arrays.
     """
     
-    results=[]
-    
     # The matches are given in start-stop pairs. The first aligment is done 
     # from the beginning to the first start. Then, alignments are between each
     # stop and the next start. I am assuming that an equal number of pairs are
@@ -202,24 +201,74 @@ def anchor_align(human_seq, fly_seq, human_match, fly_match):
     assert(np.min(fly_match)>=0)
        
     # For all the sections between a 'stop' and a 'start' align the sections
-    for n in range(np.size(human_match[:,0])-1):
-        results.append(find_alignments(
-                      human_seq[int(human_match[n,1]):int(human_match[n+1,0])],
-                      fly_seq[int(fly_match[n,1]):int(fly_match[n+1,0])] ))
+    score = 0.0
+    new_human = human_seq[:int(human_match[0,0])]
+    new_fly = fly_seq[:int(fly_match[0,0])]
+
+    num_matches = np.shape(human_match)[0]
+
+    for n in range(num_matches):
+
+        # Create the indicices
+        hstart = int(human_match[n,0])
+        hstop = int(human_match[n,1])
+        fstart = int(fly_match[n,0])
+        fstop = int(fly_match[n,1])
         
+        # Align the matched sequence
+        (tmpscore, _, _) = find_alignments(human_seq[hstart:hstop],
+                                                     fly_seq[fstart:fstop])
+
+        # Append the matched results
+        score += tmpscore
+        new_human += human_seq[hstart:hstop]
+        new_fly += fly_seq[fstart:fstop]
+        
+        # Align the sequence between stop and next start
+        if n<num_matches-1:
+            hnext = int(human_match[n+1,0])
+            fnext = int(fly_match[n+1,0])
+            (tmpscore, tmphseq, tmpfseq) = find_alignments(human_seq[hstop:hnext],
+                                                         fly_seq[fstop:fnext])
+        
+            # Append the matched results
+            score += tmpscore
+            new_human += tmphseq
+            new_fly += tmpfseq
+        
+        elif n==num_matches-1:
+            # Append the final sequences
+            new_human += human_seq[hstop:]
+            new_fly += fly_seq[fstop:]        
     
-    return results
+    return (score, new_human, new_fly)
 
 def print_alignments(file, results):
     """
     Print the alignment scores and sequences
     """
+    import textwrap
     
-    for result in results:
-        score, seq1, seq2 = result
-        print(score, file=file)
-        print('HUMAN\n\t{}'.format(seq1), file=file)
-        print('FLY\n\t{}'.format(seq2), file=file)
+    score, seq1, seq2 = results
+    
+    print('Score: {}'.format(score), file=file)
+        
+    seq1wrap = textwrap.wrap(seq1, width=50)
+    seq2wrap = textwrap.wrap(seq2, width=50)
+    
+    print('\nHUMAN SEQUENCE', file=file)
+    print('*'*20, file=file)
+    
+    for line1 in seq1wrap:
+        print('{:<}'.format(line1), file=file)
+        
+    print('\nFLY SEQUENCE', file=file)
+    print('*'*20, file=file)
+    
+    for line2 in seq2wrap:    
+        print('{:<}'.format(line2), file=file)
+        
+        
 
 def main(query, ref, match=None, output=None):
     """
@@ -238,7 +287,7 @@ def main(query, ref, match=None, output=None):
                                           fly_match)
     else:
         # If no match file, align the whole sequences
-        results = [ find_alignments(human_seq, fly_seq) ]
+        results = find_alignments(human_seq, fly_seq)
         
     if output:
         # If an output file is given, write to it
