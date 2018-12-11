@@ -13,6 +13,7 @@ from random import randrange, choice
 from collections import defaultdict
 from copy import deepcopy
 from graphviz import Digraph
+from difflib import SequenceMatcher
 
 
 class DirectedGraph(object):
@@ -217,8 +218,91 @@ class HamiltionianGraph(DirectedGraph):
             self.add_sequence(base_list)
 
     def add_sequence(self, base_list):
-        pass
+        """
+        Iterate over the sequence in *base_list* create the k-mers
+        and adding them to the edges and vertices.
+        """
 
+        k = self.k
+        L = len(base_list)
+
+        for n in range(L-k+1):
+            vertex = base_list[n:n+k]
+
+            if n+k<L:
+                tail, head = vertex, base_list[n+1:n+k+1]
+                self.add_edge((tail, head))
+            else:
+                self.add_vertex(vertex)
+
+        if L<k:
+            self.add_vertex(vertex)
+
+    def compute_overlap(self):
+        """
+        Take the edges dict and compute the overlap between
+        every pair of vertices
+        """
+
+        overlap = defaultdict(dict)
+
+        vertices = list(self.vertices.keys())
+
+        for vertex in vertices:
+            for node in vertices:
+                if node==vertex:
+                    continue
+                else:
+                    n = self._lcs(vertex, node)
+                    m = 0
+                    if n>0:
+                        if node in overlap[vertex]:
+                            m=overlap[vertex][node]
+                        overlap[vertex][node] = max([m,n])
+                    if n<0:
+                        if vertex in overlap[node]:
+                            m=overlap[node][vertex]
+                        n *= -1
+                        overlap[node][vertex] = max([m,n])
+            
+            vertices.remove(vertex)
+
+        self.overlap = overlap
+
+    def _lcs(self,a,b):
+        """
+        Function to compute the longest common substring.
+        """
+
+        s = SequenceMatcher(None)
+        s.set_seq2(b)
+        len_b = len(b)
+        s.set_seq1(a)
+        len_a = len(a)
+
+        olaps = s.get_matching_blocks()
+
+        if s.ratio() < self.min_olap/max([len_a,len_b]):
+            return 0
+
+        for (i,j,n) in olaps:
+            if j==0 and i+n==len_a:
+                # Then a is the tail and be is the head
+                return n
+
+            if i==0 and j+n==len_b:
+                # Then b is the tail and a is the head
+                return -1*n
+     
+        return 0
+
+    def plot_graph(self, name='Graph'):
+        graph = Digraph(name, format='png')
+        for tail in self.overlap:
+            for head, olap in self.overlap[tail].items():
+                graph.edge(tail, head, label=str(olap))
+
+        graph.view()
 
 def parse_sequence(sequence):
     """
@@ -251,6 +335,17 @@ def pellets(sequence, length=100, errors=False):
                 pellet[err_idx] = choice(bases.replace(err_char,''))
 
         yield pellet
+
+def calc_match(seq1, seq2):
+    """
+    Take two sequences and calculate how closely they match.
+    """
+
+    matcher = SequenceMatcher(seq1, seq2)
+
+    matcher.get_matching_blocks()
+
+    return matcher.ratio()
 
 
 if __name__=="__main__":
